@@ -3,7 +3,11 @@ Revision history for Perl extension Math::Curve::Hilbert.
 0.01  Wed May 21 22:25:46 2003
 	- original version; created by h2xs 1.21 with options
 		-X Math::Curve::Hilbert
-0.02  Thu May 22 13:30
-    - fixed errors in documentation
-    - added optional step size
+0.02  Thu May 22 13:30 2003
+        - fixed errors in documentation
+        - added optional step size
 
+0.03 - Wed May 28 00:30 2003
+        - fixed logical errors in documentation
+	- fixed schoolboy error in stepping code
+	- added more detailed documentation

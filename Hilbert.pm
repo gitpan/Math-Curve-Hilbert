@@ -13,31 +13,35 @@ BEGIN {
   %EXPORT_TAGS = ( 'all' => [ qw( &up &down &left &right ) ] );
   @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
   @EXPORT = qw( &up &down &left &right );
-  $VERSION = '0.02';
+  $VERSION = '0.03';
 }
 
-my %defaults = ( step => 0 );
+my %defaults = ( step => 1 );
 
 sub up {
-  warn "up\n";
   my %args = @_;
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
-  my $step = $args{step} || $defaults{step};
+  my $step = ($args{step} > 0) ? $args{step} :  $defaults{step};
+  warn "up -- step : $step / x : $$x / y : $$y \n";
+  if ($this_level == 1) {
+    warn "first call! \n";
+    push (@$coords,{X=>$$x,Y=>$$y});
+  }
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{right(X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   } else {
     if ($args{max} == $this_level) {
@@ -58,25 +62,29 @@ sub up {
 }
 
 sub left {
-  warn "left \n";
   my %args = @_;
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
-  my $step = $args{step} || $defaults{step};
+  my $step = ($args{step} > 0) ? $args{step}:  $defaults{step};
+  warn "left -- step : $step / x : $$x / y : $$y \n";
+  if ($this_level == 1) {
+    warn "first call! \n";
+    push (@$coords,{X=>$$x,Y=>$$y});
+  }
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   } else {
     if ($args{max} == $this_level) {
@@ -84,38 +92,42 @@ sub left {
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   }
   return $coords;
 }
 
 sub right {
-  warn "right\n";
   my %args = @_;
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
-  my $step = $args{step} || $defaults{step};
+  my $step = ($args{step} > 0) ? $args{step}:  $defaults{step};
+  warn "right -- step : $step / x : $$x / y : $$y \n";
+  if ($this_level == 1) {
+    warn "first call! \n";
+    push (@$coords,{X=>$$x,Y=>$$y});
+  }
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   } else {
     if ($args{max} == $this_level) {
@@ -123,38 +135,42 @@ sub right {
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   }
   return $coords;
 }
 
 sub down {
-  warn "down\n";
   my %args = @_;
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
-  my $step = $args{step} || $defaults{step};
+  my $step = ($args{step} > 0) ? $args{step}:  $defaults{step};
+  warn "down -- step : $step / x : $$x / y : $$y \n";
+  if ($this_level == 1) {
+    warn "first call! \n";
+    push (@$coords,{X=>$$x,Y=>$$y});
+  }
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   } else {
     if ($args{max} == $this_level) {
@@ -162,13 +178,13 @@ sub down {
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
       $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
+      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
     }
   }
   return $coords;
@@ -187,28 +203,43 @@ Math::Curve::Hilbert - Perl Implementation of Hilberts space filling Curve
 
 =head1 SYNOPSIS
 
-  use Math::Curve::Hilbert qw(up down left right);
+#!/usr/bin/perl
+use Math::Curve::Hilbert qw(up);
 
-  # get array of coordinates for curve of 4x4 square
-  my ($startx,$starty) = (1,8);
-  my $coords = up ( max=>2, level=>0, X=>\$startx, Y=>\$starty, clockwise=>1 );
+print "8x8 with steps of 10 centered in 150x150 square \n";
+#get array of coordinates for curve of 8x8 square
+my ($startx,$starty) = (39,109);
+my $curve = up ( max=>3, level=>0, X=>\$startx, Y=>\$starty, step=>10,clockwise=>1 );
 
-  # print coordinates of the 4th cell on the curve
-  print "$coords->[3]{X}, $coords->[3]{Y}\n";
-
-  . . .
-
-  # get array of coordinates to draw 8x8 curve in 80x80 pixels
-  my ($startx,$starty) = (0,79);
-  my $coords = up ( max=>2, level=>0, X=>\$startx, Y=>\$starty, clockwise=>1, step=>10 );
+foreach my $coords (@$curve) {
+  print "x:$coords->{X} / y: $coords->{Y}\n";
+}
 
 =head1 DESCRIPTION
 
 The Hilbert Curve module provides some useful functions using Hilberts Space-filling Curve. This is handy for things like Dithering, Flattening n-dimensional data, fractals - all kind of things really.
 
+Currently this module only provides basic features - an array of coordinates that the curve passes through in a square, rudimentary error checking that the square sides are a power of 4 or negative coordinates are not handled.
+
+=head1 USING
+
+Plotting a curve is pretty easy you use the function for the direction you wish to plot in - for example if plotting from bottom left to bottom right (basic cup) you would call : my $curve = up ( max=>$max, level=>0, X=>\$startx, Y=>\$starty, clockwise=>1 );
+
+The level should map to a power of 4 - for example an 8x8 square would have a max of 3 and a 16x16 square would have a max of 4, in the example above the max is 3 for 4x4.
+
+You can space out coordinates by passing a value to step the points by, this means the coordinates can be used to draw fractals.
+
 =head2 EXPORT
 
 None by default.
+
+up : plot upwards ( up - along - down )
+
+down : plot down (down - along - up )
+
+left : plot left ( left - up/down - right )
+
+right : plot right ( right - up/down - left )
 
 =head1 AUTHOR
 
