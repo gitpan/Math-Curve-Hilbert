@@ -1,193 +1,526 @@
 # Hibert.pm Perl Implementation of Hilberts space filling Curve
 package Math::Curve::Hilbert;
 
+
+=head1 NAME
+
+Math::Curve::Hilbert - Perl Implementation of Hilberts space filling Curve
+
+=head1 SYNOPSIS
+
+  use Math::Curve::Hilbert;
+
+  # get object representing 8x8 curve with a step of 10 (i.e. draw 80x80 pixels)
+  my $hilbert = Math::Curve::Hilbert->new( direction=>'up', max=>3, clockwise=>1, step=>10);
+
+  # get a point from coordinates
+  my $point = $hilbert->PointFromCoordinates(20,60);
+
+  # get coordinates from a point
+  my ($x,$y) = $hilbert->CoordinatesFromPoint($point);
+
+
+  # get range(s) from box
+  my @ranges = $hilbert->RangeFromCoordinates($x1,$y1,$x2,$y2);
+
+  #
+  # draw image representing curve
+
+  use GD;
+  # create a new image
+  my $im = new GD::Image(300,300);
+  my $black = $im->colorAllocate(0,0,0);
+  my $blue = $im->colorAllocate(0,0,255);
+
+  my $count = 0;
+  my ($x1,$y1) = $hilbert->CoordinatesFromPoint($count++);
+  while ( ($hilbert->CoordinatesFromPoint($count))[0] ) {
+      my ($x2,$y2) = $hilbert->CoordinatesFromPoint($count++);
+      $im->line($x1,$y1,$x2,$y2,$black);
+      ($x1,$y1) = ($x2,$y2);
+  }
+
+=head1 DESCRIPTION
+
+The Hilbert Curve module provides some useful functions using Hilberts Space-filling Curve. This is handy for things like Dithering, Flattening n-dimensional data, fractals - all kind of things really.
+
+"A Space Filling Curve is a special fractal curve which has the following basic characteristics:
+ ­ it covers completely an area, a volume or a hyper-volume in a 2-d, 3-d or N-d space respectively,
+ ­ each point is visited once and only once (the curve does not cross itself), and
+ ­ neighbor points in the native space are likely to be neighbors in the space filling curve."
+definition from Multiple Range Query Optimization in Spatial Databases, Apostolos N. Papadopoulos and Yannis Manolopoulos
+
+Other space filling curves include The Peano and Morton or Z-order curves. There is also the Hilbert II curve which has an 'S' shape rather than a 'U' shape. The Hilbert curve can also be applied to 3 dimensions, but this module only supports 2 dimensions.
+
+Like most space filling curves, the area must be divided into 2 to the power of N parts, such as 8, 16, 32, etc
+
+=head2 EXPORT
+
+None by default.
+
+=cut
+
 use strict;
 
-#
-# Set up the module for CPAN, etc
+use Data::Dumper;
 
-BEGIN {
-  use Exporter ();
-  use vars qw(@ISA %EXPORT_TAGS @EXPORT @EXPORT_OK $VERSION);
-  @ISA = qw(Exporter);
-  %EXPORT_TAGS = ( 'all' => [ qw( &up &down &left &right ) ] );
-  @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
-  @EXPORT = qw( &up &down &left &right );
-  $VERSION = '0.03';
+use vars qw(@ISA $VERSION);
+$VERSION = '0.04';
+
+=head1 METHODS
+
+=head2 new
+
+  # get object representing 8x8 curve with a step of 10 (i.e. draw 80x80 pixels)
+  my $hilbert = Math::Curve::Hilbert->new( direction=>'up', max=>3, clockwise=>1, step=>10);
+
+  direction specifies which direction the curve follows :
+
+  up (clockwise) : up, right, down
+  down (clockwise ) : down, right, up
+  left (clockwise) : left, up, right
+  right (clockwise) : right, down, left
+
+  clockwise specifies if the curve moves clockwise or anti-clockwise, the default is clockwise
+
+  max specifies the size of the grid to plot in powers of 2 - max=>2 would be a 4x4 grid, max=>4 would be 16 x 16 grid
+
+  step specifies how large a step should be (used in drawing the curve), the default is 1
+
+  X and Y allow you to specify a starting X and Y coordinate by passing a reference to a the value
+
+=cut
+
+
+sub new {
+    my ($class,%options) = @_;
+    $options{clockwise} = 1 unless (defined $options{clockwise});
+    $options{step} ||= 1;
+    $options{level} ||= 0;
+    my $self = bless({%options},ref $class || $class);
+    my $maxsize = (2 ** $options{max}) * $options{step};
+    my $minsize = $options{step};
+    my $X = $options{X};
+    my $Y = $options{Y};
+ DIRECTION: {
+	if (lc$options{direction} =~ m/up/) {
+	    $X ||= ( $options{clockwise} ) ? $minsize : $maxsize ;
+	    $Y ||= $maxsize;
+	    $options{X} = \$X;
+	    $options{Y} = \$Y ;
+	    $self->{coords} = $self->up(%options), last;
+	}
+	if (lc$options{direction} =~ m/down/) {
+	    $X ||= ( $options{clockwise} ) ?  $maxsize: $minsize ;
+	    $Y ||= $minsize ;
+	    $options{X} = \$X;
+	    $options{Y} = \$Y ;
+	    $self->{coords} =  $self->down(%options), last;
+	}
+	if (lc$options{direction} =~ m/left/) {
+	    $X ||= $maxsize;
+	    $Y ||= ( $options{clockwise} ) ? $maxsize : $minsize ;
+	    $options{X} = \$X;
+	    $options{Y} = \$Y ;
+	    $self->{coords} = $self->left(%options), last;
+	}
+	if (lc$options{direction} =~ m/right/) {
+	    $X ||= $minsize;
+	    $Y ||= ( $options{clockwise} ) ? $minsize : $maxsize ;
+	    $options{X} = \$X;
+	    $options{Y} = \$Y ;
+	    $self->{coords} = $self->right(%options), last;
+	}
+    }; # end of DIRECTION
+    return $self;
 }
 
-my %defaults = ( step => 1 );
+=head2 PointFromCoordinates
+
+  my $point = $hilbert->PointFromCoordinates(20,60);
+
+=cut
+
+sub PointFromCoordinates {
+    my ($self,$x,$y) = @_;
+    my $point = $self->{curve}{"$x:$y"};
+    return $point;
+}
+
+=head2 CoordinatesFromPoint
+
+  my ($x1,$y1) = $hilbert->CoordinatesFromPoint($point);
+
+=cut
+
+sub CoordinatesFromPoint {
+    my ($self,$point) = @_;
+    return ($self->{coords}[$point]{X},$self->{coords}[$point]{Y});
+}
+
+=head2 RangeFromCoordinates
+
+  # get range(s) from box
+  my @ranges = $hilbert->RangeFromCoordinates($x1,$y1,$x2,$y2);
+
+=cut
+
+sub RangeFromCoordinates {
+    my ($self,$x1,$y1,$x2,$y2) = @_;
+
+    # get point from top left coordinate
+    my $startpoint;
+    my $nextpoint;
+    my %rangepoints;
+    my @ranges;
+
+    my ($xx,$yy) = ($x1,$y1);
+    while ( ($xx <= $x2) && ($yy <= $y2) ) {
+	$startpoint = $self->{curve}{"$xx:$yy"};
+	unless (defined $rangepoints{$startpoint}) {
+	    push (@ranges,$startpoint);
+	    $rangepoints{$startpoint} = $#ranges;
+	    $nextpoint = $startpoint;
+	    my $ok = 1;
+	    while ( $ok == 1 ) {
+		$startpoint++;
+		my ($x,$y) = ($self->{coords}[$startpoint]{X},$self->{coords}[$startpoint]{Y});
+		if ($x <= $x2 && $y <= $y2 && $x >= $x1 && $y >= $y1) {
+		    if ($rangepoints{$startpoint}) {
+			$ranges[$rangepoints{$startpoint}] = $nextpoint;
+			pop(@ranges);
+			last;
+		    } else {
+			$rangepoints{$startpoint} = $#ranges;
+			$nextpoint = $startpoint;
+		    }
+		} else {
+		    push (@ranges,$nextpoint);
+		    $rangepoints{$startpoint} = 0;
+		    $ok = 0;
+		}
+	    }
+	}
+	if ($xx == $x2) {
+	    if ( $yy < $y2) { $yy++; $xx = $x1; }
+	    else { last; }
+	} else {
+	    $xx++;
+	}
+    }
+    return @ranges;
+
+}
+
+################################################################################
 
 sub up {
+  my $self = shift;
   my %args = @_;
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
-  my $step = ($args{step} > 0) ? $args{step} :  $defaults{step};
-  warn "up -- step : $step / x : $$x / y : $$y \n";
+  my $step = $args{step} || $self->{step};
+#  warn "up : x : $$x, y : $$y, step : $step, level : $this_level\n";
   if ($this_level == 1) {
-    warn "first call! \n";
-    push (@$coords,{X=>$$x,Y=>$$y});
+      push (@$coords,{X=>$$x,Y=>$$y});
+      $self->{curve}{"$$x:$$y"} = $#$coords;
   }
   if ($args{clockwise}) {
-    if ($args{max} == $this_level) {
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-    } else {
-      push(@$coords,@{right(X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-    }
+      if ($args{max} == $this_level) {
+	  $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+      } else {
+	  foreach (@{$self->right(X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->left(X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+      }
   } else {
-    if ($args{max} == $this_level) {
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-    } else {
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-    }
+      if ($args{max} == $this_level) {
+	  $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+      } else {
+	  foreach (@{$self->left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords + 1;
+	  foreach (@{$self->up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords + 1;
+	  foreach (@{$self->up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+      }
   }
   return $coords;
 }
 
+
 sub left {
+  my $self = shift;
   my %args = @_;
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
-  my $step = ($args{step} > 0) ? $args{step}:  $defaults{step};
-  warn "left -- step : $step / x : $$x / y : $$y \n";
+  my $step = $args{step} || $self->{step};
+#  warn "left : x : $$x, y : $$y, step : $step, level : $this_level\n";
   if ($this_level == 1) {
-    warn "first call! \n";
-    push (@$coords,{X=>$$x,Y=>$$y});
+      push (@$coords,{X=>$$x,Y=>$$y});
+      $self->{curve}{"$$x:$$y"} = $#$coords;
   }
   if ($args{clockwise}) {
-    if ($args{max} == $this_level) {
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-    } else {
-      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-    }
+      if ($args{max} == $this_level) {
+	  $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+      } else {
+	  foreach (@{$self->up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+      }
   } else {
-    if ($args{max} == $this_level) {
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-    } else {
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-    }
+      if ($args{max} == $this_level) {
+	  $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+      } else {
+	  foreach (@{$self->down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+	  $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	  $self->{curve}{"$$x:$$y"} = $#$coords;
+	  foreach (@{$self->up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+	      push (@$coords,$_);
+	      $self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	  }
+      }
   }
   return $coords;
 }
 
 sub right {
-  my %args = @_;
-  my $coords = [];
-  my $this_level = $args{level} + 1;
-  my ($x,$y) = ($args{X}, $args{Y});
-  my $step = ($args{step} > 0) ? $args{step}:  $defaults{step};
-  warn "right -- step : $step / x : $$x / y : $$y \n";
-  if ($this_level == 1) {
-    warn "first call! \n";
-    push (@$coords,{X=>$$x,Y=>$$y});
-  }
-  if ($args{clockwise}) {
-    if ($args{max} == $this_level) {
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-    } else {
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
+    my $self = shift;
+    my %args = @_;
+    my $coords = [];
+    my $this_level = $args{level} + 1;
+    my ($x,$y) = ($args{X}, $args{Y});
+    my $step = $args{step} || $self->{step};
+#    warn "right : x : $$x, y : $$y, step : $step, level : $this_level\n";
+    if ($this_level == 1) {
+	push (@$coords,{X=>$$x,Y=>$$y});
+	$self->{curve}{"$$x:$$y"} = $#$coords;
     }
-  } else {
-    if ($args{max} == $this_level) {
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+    if ($args{clockwise}) {
+	if ($args{max} == $this_level) {
+	    $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	} else {
+	    foreach (@{$self->down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	}
     } else {
-      push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
+	if ($args{max} == $this_level) {
+	    $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	} else {
+	    foreach (@{$self->up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	}
     }
-  }
-  return $coords;
+    return $coords;
 }
 
 sub down {
-  my %args = @_;
-  my $coords = [];
-  my $this_level = $args{level} + 1;
-  my ($x,$y) = ($args{X}, $args{Y});
-  my $step = ($args{step} > 0) ? $args{step}:  $defaults{step};
-  warn "down -- step : $step / x : $$x / y : $$y \n";
-  if ($this_level == 1) {
-    warn "first call! \n";
-    push (@$coords,{X=>$$x,Y=>$$y});
-  }
-  if ($args{clockwise}) {
-    if ($args{max} == $this_level) {
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-    } else {
-      push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
+    my $self = shift;
+    my %args = @_;
+    my $coords = [];
+    my $this_level = $args{level} + 1;
+    my ($x,$y) = ($args{X}, $args{Y});
+    my $step = $args{step} || $self->{step};
+#    warn "down : x : $$x, y : $$y, step : $step, level : $this_level\n";
+    if ($this_level == 1) {
+	push (@$coords,{X=>$$x,Y=>$$y});
+	$self->{curve}{"$$x:$$y"} = $#$coords;
     }
-  } else {
-    if ($args{max} == $this_level) {
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+    if ($args{clockwise}) {
+	if ($args{max} == $this_level) {
+	    $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	} else {
+	    foreach (@{$self->left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	}
     } else {
-      push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
-      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
-      push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max}, step=>$step)});
+	if ($args{max} == $this_level) {
+	    $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	    $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    $self->{curve}{"$$x:$$y"} = $#$coords;
+	} else {
+	    foreach (@{$self->right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	    $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+	    foreach (@{$self->left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})}) {
+		push (@$coords,$_);
+		$self->{curve}{"$_->{X}:$_->{Y}"} = $#$coords;
+	    }
+	}
     }
-  }
-  return $coords;
+    return $coords;
 }
 
 
@@ -197,50 +530,6 @@ __END__
 
 ##########################################################################
 
-=head1 NAME
-
-Math::Curve::Hilbert - Perl Implementation of Hilberts space filling Curve
-
-=head1 SYNOPSIS
-
-#!/usr/bin/perl
-use Math::Curve::Hilbert qw(up);
-
-print "8x8 with steps of 10 centered in 150x150 square \n";
-#get array of coordinates for curve of 8x8 square
-my ($startx,$starty) = (39,109);
-my $curve = up ( max=>3, level=>0, X=>\$startx, Y=>\$starty, step=>10,clockwise=>1 );
-
-foreach my $coords (@$curve) {
-  print "x:$coords->{X} / y: $coords->{Y}\n";
-}
-
-=head1 DESCRIPTION
-
-The Hilbert Curve module provides some useful functions using Hilberts Space-filling Curve. This is handy for things like Dithering, Flattening n-dimensional data, fractals - all kind of things really.
-
-Currently this module only provides basic features - an array of coordinates that the curve passes through in a square, rudimentary error checking that the square sides are a power of 4 or negative coordinates are not handled.
-
-=head1 USING
-
-Plotting a curve is pretty easy you use the function for the direction you wish to plot in - for example if plotting from bottom left to bottom right (basic cup) you would call : my $curve = up ( max=>$max, level=>0, X=>\$startx, Y=>\$starty, clockwise=>1 );
-
-The level should map to a power of 4 - for example an 8x8 square would have a max of 3 and a 16x16 square would have a max of 4, in the example above the max is 3 for 4x4.
-
-You can space out coordinates by passing a value to step the points by, this means the coordinates can be used to draw fractals.
-
-=head2 EXPORT
-
-None by default.
-
-up : plot upwards ( up - along - down )
-
-down : plot down (down - along - up )
-
-left : plot left ( left - up/down - right )
-
-right : plot right ( right - up/down - left )
-
 =head1 AUTHOR
 
 A. J. Trevena, E<lt>teejay@droogs.orgE<gt>
@@ -248,5 +537,7 @@ A. J. Trevena, E<lt>teejay@droogs.orgE<gt>
 =head1 SEE ALSO
 
 L<perl>.
+
+L<http://mathworld.wolfram.com/HilbertCurve.html>
 
 =cut
