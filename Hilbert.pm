@@ -13,8 +13,10 @@ BEGIN {
   %EXPORT_TAGS = ( 'all' => [ qw( &up &down &left &right ) ] );
   @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
   @EXPORT = qw( &up &down &left &right );
-  $VERSION = '0.01';
+  $VERSION = '0.02';
 }
+
+my %defaults = ( step => 0 );
 
 sub up {
   warn "up\n";
@@ -22,32 +24,33 @@ sub up {
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
+  my $step = $args{step} || $defaults{step};
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{right(X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{left(X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   } else {
     if ($args{max} == $this_level) {
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   }
@@ -60,32 +63,33 @@ sub left {
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
+  my $step = $args{step} || $defaults{step};
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   } else {
     if ($args{max} == $this_level) {
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   }
@@ -98,32 +102,33 @@ sub right {
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
+  my $step = $args{step} || $defaults{step};
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{up(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   } else {
     if ($args{max} == $this_level) {
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{up(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   }
@@ -136,32 +141,33 @@ sub down {
   my $coords = [];
   my $this_level = $args{level} + 1;
   my ($x,$y) = ($args{X}, $args{Y});
+  my $step = $args{step} || $defaults{step};
   if ($args{clockwise}) {
     if ($args{max} == $this_level) {
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{left(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{down(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{right(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   } else {
     if ($args{max} == $this_level) {
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
     } else {
       push(@$coords,@{right(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$x++; push (@$coords,{X=>$$x,Y=>$$y});
+      $$x += $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{down(clockwise=>0,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
-      $$y--; push (@$coords,{X=>$$x,Y=>$$y});
+      $$y -= $step; push (@$coords,{X=>$$x,Y=>$$y});
       push(@$coords,@{left(clockwise=>1,X=>$x,Y=>$y,level=>$this_level,max=>$args{max})});
     }
   }
@@ -183,12 +189,18 @@ Math::Curve::Hilbert - Perl Implementation of Hilberts space filling Curve
 
   use Math::Curve::Hilbert qw(up down left right);
 
-  # get array of coordinates for 4x4 square
-  my $coords = up ( max=>2, level=>0, x=>0, y=>4, clockwise=>1 );
+  # get array of coordinates for curve of 4x4 square
+  my ($startx,$starty) = (1,8);
+  my $coords = up ( max=>2, level=>0, X=>\$startx, Y=>\$starty, clockwise=>1 );
 
   # print coordinates of the 4th cell on the curve
-  print "$coords->[4]{X}, $coords->[4]{Y}\n";
+  print "$coords->[3]{X}, $coords->[3]{Y}\n";
 
+  . . .
+
+  # get array of coordinates to draw 8x8 curve in 80x80 pixels
+  my ($startx,$starty) = (0,79);
+  my $coords = up ( max=>2, level=>0, X=>\$startx, Y=>\$starty, clockwise=>1, step=>10 );
 
 =head1 DESCRIPTION
 
